@@ -2,8 +2,13 @@
   "name": "typed-vue-template",
   "version": "0.0.0",
   "author": "katashin",
-  "description": "",
-  "keywords": [],
+  "description": "Inject Vue template into TypeScript class as method",
+  "keywords": [
+    "Vue",
+    "TypeScript",
+    "template",
+    "render"
+  ],
   "license": "MIT",
   "main": "lib/index.js",
   "typings": "lib/index.d.ts",
