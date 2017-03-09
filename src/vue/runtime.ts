@@ -24,5 +24,6 @@ declare module 'vue/types/vue' {
     _v: Function
     _e: Function
     _u: Function
+    _self: this
   }
 }
