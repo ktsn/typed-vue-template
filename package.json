@@ -37,6 +37,7 @@
     "tslint-config-ktsn": "^2.0.1",
     "typescript": "^2.2.1",
     "vue": "^2.2.2",
-    "vue-template-compiler": "^2.2.2"
+    "vue-template-compiler": "^2.2.2",
+    "vue-template-es2015-compiler": "^1.5.1"
   }
 }

@@ -9,6 +9,7 @@
 
 import * as assert from 'assert'
 import * as ts from 'typescript'
+import * as transpile from 'vue-template-es2015-compiler'
 import * as vueCompiler from 'vue-template-compiler'
 import { VueFile } from './vue/vue-file'
 
@@ -74,16 +75,18 @@ export function compile (vueFile: VueFile): VueFile {
     const className = node.name!.text
 
     // Import runtime module
-    const importCode = 'import { inject } from "typed-vue-template/lib/vue/runtime"'
+    const importCode = 'import { inject } from "typed-vue-template/lib/vue/runtime";'
 
     // Inject staticRenderFns
-    const staticFnsCode = `inject(${className}, [${staticRenderFns.map(toFunction).join(',')}])`
+    const staticFnsCode = `inject(${className}, `
+      + transpile('[' + staticRenderFns.map(toFunction).join(',') + ']')
+      + ');'
 
     // Inject render function
     const injectedCode = replace(
       node,
       node.getFullText(sourceFile).replace(/\}\s*$/, '\n' + [
-        '  render () { ' + render + ' }',
+        '  render () { ' + transpileWithWrap(render) + ' }',
         '}'
       ].join('\n'))
     ).text
@@ -113,5 +116,13 @@ export function compile (vueFile: VueFile): VueFile {
 }
 
 function toFunction (code: string): string {
-  return `function () { ${code} }`
+  return `function(){${code}}`
+}
+
+function transpileWithWrap (code: string): string {
+  const pre = '(function(){'
+  const post = '})()'
+  return transpile(pre + code + post)
+    .slice(pre.length)
+    .slice(0, -post.length)
 }
