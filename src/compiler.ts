@@ -78,14 +78,15 @@ export function compile (vueFile: VueFile): VueFile {
     const importCode = 'import { inject } from "typed-vue-template/lib/vue/runtime";'
 
     // Inject staticRenderFns
-    const staticFnsCode = `inject(${className}, `
-      + transpile('[' + staticRenderFns.map(toFunction).join(',') + ']')
-      + ');'
+    const transpiledStaticFns = staticRenderFns
+      .map(transpileWithWrap)
+      .map(toFunction)
+    const staticFnsCode = `inject(${className}, [${transpiledStaticFns.join(',')}]);`
 
     // Inject render function
     const injectedCode = replace(
       node,
-      node.getFullText(sourceFile).replace(/\}\s*$/, '\n' + [
+      node.getFullText(sourceFile).replace(/\}\s*$/, [
         '  render () { ' + transpileWithWrap(render) + ' }',
         '}'
       ].join('\n'))
@@ -116,7 +117,7 @@ export function compile (vueFile: VueFile): VueFile {
 }
 
 function toFunction (code: string): string {
-  return `function(){${code}}`
+  return `function(this: any){${code}}`
 }
 
 function transpileWithWrap (code: string): string {
