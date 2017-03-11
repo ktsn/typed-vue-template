@@ -77,26 +77,25 @@ export function compile (vueFile: VueFile): VueFile {
     // Import runtime module
     const importCode = 'import { inject } from "typed-vue-template/lib/vue/runtime";'
 
-    // Inject staticRenderFns
-    const transpiledStaticFns = staticRenderFns
+    // Inject render functions
+    const renderCode = toFunction(transpileWithWrap(render), className)
+    const staticRenderCode = staticRenderFns
       .map(transpileWithWrap)
-      .map(toFunction)
-    const staticFnsCode = `inject(${className}, [${transpiledStaticFns.join(',')}]);`
-
-    // Inject render function
-    const injectedCode = replace(
-      node,
-      node.getFullText(sourceFile).replace(/\}\s*$/, [
-        '  render () { ' + transpileWithWrap(render) + ' }',
-        '}'
-      ].join('\n'))
-    ).text
+      .map(f => toFunction(f, className))
+      .join(',')
+    const injectCode = [
+      'inject(',
+      `  ${className},`,
+      `  ${renderCode},`,
+      `  [${staticRenderCode}]`,
+      ');'
+    ].join('\n')
 
     vueFile.template = null
     vueFile.script!.content = [
+      sourceFile.text,
       importCode,
-      injectedCode,
-      staticFnsCode
+      injectCode
     ].join('\n')
   }
 
@@ -116,8 +115,8 @@ export function compile (vueFile: VueFile): VueFile {
   }
 }
 
-function toFunction (code: string): string {
-  return `function(this: any){${code}}`
+function toFunction (code: string, thisName: string = 'any'): string {
+  return `function(this:${thisName}){${code}}`
 }
 
 function transpileWithWrap (code: string): string {

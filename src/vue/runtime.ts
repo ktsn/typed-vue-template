@@ -3,8 +3,10 @@ import { ReservedTag } from './built-in'
 
 export function inject (
   Ctor: any /* typeof Vue */,
+  render: Function,
   staticRenderFns: Function[]
 ) {
+  Ctor.options.render = render
   Ctor.options.staticRenderFns = staticRenderFns
 }
 
