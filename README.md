@@ -1,6 +1,6 @@
 # typed-vue-template
 
-Inject Vue template into TypeScript class as method
+**Highly experimental** Do not use this in production
 
 ## License
 
