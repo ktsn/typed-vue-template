@@ -16,17 +16,7 @@ import { VueFile } from './vue/vue-file'
 export function compile (vueFile: VueFile): VueFile {
   if (!vueFile.hasTsScript()) return vueFile
 
-  if (!vueFile.template) return vueFile
-
-  const { render, staticRenderFns, errors } = vueCompiler.compile(vueFile.template.content)
-  if (errors.length > 0) {
-    errors.forEach(error => {
-      console.log(error)
-    })
-    return vueFile
-  }
-
-  const sourceFile = ts.createSourceFile(
+  let sourceFile = ts.createSourceFile(
     vueFile.fileName,
     vueFile.script!.content,
     ts.ScriptTarget.ES2017
@@ -37,25 +27,16 @@ export function compile (vueFile: VueFile): VueFile {
   return vueFile
 
   function visitClass (node: ts.ClassDeclaration): void {
-    let isExport = false
-    let isDefault = false
+    if (!isDefaultExport(node)) return
 
-    if (node.modifiers) {
-      node.modifiers.forEach(m => {
-        switch (m.kind) {
-          case ts.SyntaxKind.ExportKeyword:
-            isExport = true
-            break
-          case ts.SyntaxKind.DefaultKeyword:
-            isDefault = true
-            break
-          default:
-        }
-      })
-    }
+    assert(node.name, 'Component class must be named')
 
-    if (isExport && isDefault) {
-      injectRender(node)
+    const className = node.name!.text
+    injectRender(className)
+
+    const children = getChildrenNames(sourceFile, node)
+    if (children) {
+      injectDeclaration(node, className, children)
     }
   }
 
@@ -69,10 +50,16 @@ export function compile (vueFile: VueFile): VueFile {
     }
   }
 
-  function injectRender (node: ts.ClassDeclaration): void {
-    assert(node.name, 'Component class must be named')
+  function injectRender (className: string): void {
+    if (!vueFile.template) return
 
-    const className = node.name!.text
+    const { render, staticRenderFns, errors } = vueCompiler.compile(vueFile.template.content)
+    if (errors.length > 0) {
+      errors.forEach(error => {
+        console.error(error)
+      })
+      return
+    }
 
     // Import runtime module
     const importCode = 'import { inject } from "typed-vue-template/lib/vue/runtime";'
@@ -93,10 +80,39 @@ export function compile (vueFile: VueFile): VueFile {
 
     vueFile.template = null
     vueFile.script!.content = [
-      sourceFile.text,
+      vueFile.script!.content,
       importCode,
       injectCode
     ].join('\n')
+
+    // Ensure consistent with sourceFile
+    sourceFile = replace(sourceFile, vueFile.script!.content)
+  }
+
+  function injectDeclaration (node: ts.ClassDeclaration, className: string, components: string[]) {
+    const importCode = 'import { ReservedTag } from "typed-vue-template/lib/vue/runtime";'
+
+    const methods = components.map(c => {
+      return `(name: "${hyphenate(c)}", data?: any, children?: any): any`
+    })
+
+    const declaration = [
+      '_c: {',
+      methods.join('\n'),
+      '(name: ReservedTag, data?: any, children?: any): any',
+      '}'
+    ].join('\n')
+
+    const injectedCode = node.getFullText(sourceFile)
+      .replace(/(\}\s*)$/, '\n' + declaration + '\n$1')
+
+    sourceFile = replace(node, injectedCode)
+    sourceFile = replace(sourceFile, [
+      importCode,
+      sourceFile.getFullText()
+    ].join('\n'))
+
+    vueFile.script!.content = sourceFile.getFullText()
   }
 
   function replace (node: ts.Node, text: string): ts.SourceFile {
@@ -115,6 +131,41 @@ export function compile (vueFile: VueFile): VueFile {
   }
 }
 
+function isDefaultExport (node: ts.Node): boolean {
+  return (ts.getCombinedModifierFlags(node) & ts.ModifierFlags.ExportDefault) !== 0
+}
+
+function getChildrenNames (sourceFile: ts.SourceFile, node: ts.ClassDeclaration): string[] | undefined {
+  let res
+
+  if (!node.decorators) return
+
+  for (const decorator of node.decorators) {
+    if (decorator.expression.kind !== ts.SyntaxKind.CallExpression) continue
+
+    ts.forEachChild(decorator.expression, node => {
+      if (node.kind !== ts.SyntaxKind.ObjectLiteralExpression) return
+
+      const obj = node as ts.ObjectLiteralExpression
+      for (const prop of obj.properties) {
+        if (!prop.name || prop.name.getFullText(sourceFile).trim() !== 'components') continue
+
+        ts.forEachChild(prop, node => {
+          if (node.kind !== ts.SyntaxKind.ObjectLiteralExpression) return
+
+          res = (node as ts.ObjectLiteralExpression).properties
+            .filter(p => p.name)
+            .map(p => {
+              return p.name!.getFullText(sourceFile).trim()
+            })
+        })
+      }
+    })
+  }
+
+  return res
+}
+
 function toFunction (code: string, thisName: string = 'any'): string {
   return `function(this:${thisName}){${code}}`
 }
@@ -125,4 +176,12 @@ function transpileWithWrap (code: string): string {
   return transpile(pre + code + post)
     .slice(pre.length)
     .slice(0, -post.length)
+}
+
+const hyphenateRE = /([^-])([A-Z])/g
+function hyphenate (str: string): string {
+  return str
+    .replace(hyphenateRE, '$1-$2')
+    .replace(hyphenateRE, '$1-$2')
+    .toLowerCase()
 }

@@ -1,6 +1,8 @@
 import * as Vue from 'vue'
 import { ReservedTag } from './built-in'
 
+export { ReservedTag }
+
 export function inject (
   Ctor: any /* typeof Vue */,
   render: Function,
@@ -30,6 +32,8 @@ declare module 'vue/types/vue' {
     _self: this
 
     // Allow reserved tag names
-    _c (name: ReservedTag, data?: any, children?: any): any
+    _c: {
+      (name: ReservedTag, data?: any, children?: any): any
+    }
   }
 }
