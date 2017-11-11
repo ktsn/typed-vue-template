@@ -19,6 +19,7 @@ function test(filename: string): void {
 describe('Compiler', () => {
   [
     'class.vue',
-    'class-components.vue'
+    'class-components.vue',
+    'extend.vue'
   ].forEach(test)
 })

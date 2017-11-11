@@ -40,10 +40,20 @@ export function compile (vueFile: VueFile): VueFile {
     }
   }
 
+  function visitAssignment (node: ts.ExportAssignment): void {
+    const optionsNode = getOptionsNode(node.expression)
+    if (!optionsNode) return
+
+    injectRenderToOptions(optionsNode)
+  }
+
   function visit (node: ts.Node): void {
     switch (node.kind) {
       case ts.SyntaxKind.ClassDeclaration:
         visitClass(node as ts.ClassDeclaration)
+        break
+      case ts.SyntaxKind.ExportAssignment:
+        visitAssignment(node as ts.ExportAssignment)
         break
       default:
         ts.forEachChild(node, visit)
@@ -51,22 +61,15 @@ export function compile (vueFile: VueFile): VueFile {
   }
 
   function injectRender (className: string): void {
-    if (!vueFile.template) return
-
-    const { render, staticRenderFns, errors } = vueCompiler.compile(vueFile.template.content)
-    if (errors.length > 0) {
-      errors.forEach(error => {
-        console.error(error)
-      })
-      return
-    }
+    const compiled = compileTemplate(vueFile)
+    if (!compiled) return
 
     // Import runtime module
     const importCode = 'import { inject } from "typed-vue-template/lib/vue/runtime";'
 
     // Inject render functions
-    const renderCode = toFunction(transpileWithWrap(render), className)
-    const staticRenderCode = staticRenderFns
+    const renderCode = toFunction(transpileWithWrap(compiled.render), className)
+    const staticRenderCode = compiled.staticRenderFns
       .map(transpileWithWrap)
       .map(f => toFunction(f, className))
       .join(',')
@@ -87,6 +90,24 @@ export function compile (vueFile: VueFile): VueFile {
 
     // Ensure consistent with sourceFile
     sourceFile = replace(sourceFile, vueFile.script!.content)
+  }
+
+  function injectRenderToOptions(node: ts.ObjectLiteralExpression): void {
+    const compiled = compileTemplate(vueFile)
+    if (!compiled) return
+
+    const renderCode = toFunction(transpileWithWrap(compiled.render), undefined, 'any')
+    const staticRenderCode = compiled.staticRenderFns
+      .map(transpileWithWrap)
+      .map(f => toFunction(f, undefined, 'any'))
+      .join(',')
+
+    const pos = node.pos + 1
+    sourceFile = insert(pos, `staticRenderFns:[${staticRenderCode}],`)
+    sourceFile = insert(pos, `render:${renderCode},`)
+
+    vueFile.template = null
+    vueFile.script!.content = sourceFile.getFullText()
   }
 
   function injectDeclaration (node: ts.ClassDeclaration, className: string, components: string[]) {
@@ -115,6 +136,18 @@ export function compile (vueFile: VueFile): VueFile {
     vueFile.script!.content = sourceFile.getFullText()
   }
 
+  function insert (pos: number, text: string): ts.SourceFile {
+    const oldText = sourceFile.text
+    const newText = oldText.slice(0, pos)
+      + text
+      + oldText.slice(pos)
+
+    return sourceFile.update(newText, {
+      span: { start: pos, length: 0 },
+      newLength: text.length
+    })
+  }
+
   function replace (node: ts.Node, text: string): ts.SourceFile {
     const start = node.getFullStart()
     const end = node.getEnd()
@@ -131,8 +164,33 @@ export function compile (vueFile: VueFile): VueFile {
   }
 }
 
+function compileTemplate (vueFile: VueFile): { render: string, staticRenderFns: string[] } | undefined {
+  if (!vueFile.template) return
+
+  const { render, staticRenderFns, errors } = vueCompiler.compile(vueFile.template.content)
+  if (errors.length > 0) {
+    errors.forEach(error => {
+      console.error(error)
+    })
+    return
+  }
+
+  return { render, staticRenderFns }
+}
+
 function isDefaultExport (node: ts.Node): boolean {
   return (ts.getCombinedModifierFlags(node) & ts.ModifierFlags.ExportDefault) !== 0
+}
+
+function getOptionsNode (node: ts.Expression): ts.ObjectLiteralExpression | undefined {
+  if (node.kind !== ts.SyntaxKind.CallExpression) return
+
+  const call = node as ts.CallExpression
+  const arg = call.arguments[0]
+
+  if (arg.kind === ts.SyntaxKind.ObjectLiteralExpression) {
+    return arg as ts.ObjectLiteralExpression
+  }
 }
 
 function getChildrenNames (sourceFile: ts.SourceFile, node: ts.ClassDeclaration): string[] | undefined {
@@ -166,8 +224,22 @@ function getChildrenNames (sourceFile: ts.SourceFile, node: ts.ClassDeclaration)
   return res
 }
 
-function toFunction (code: string, thisName: string = 'any'): string {
-  return `function(this:${thisName}){${code}}`
+function toFunction (code: string, thisName?: string, returnType?: string): string {
+  let buf = 'function('
+
+  if (thisName) {
+    buf += `this:${thisName}`
+  }
+
+  buf += ')'
+
+  if (returnType) {
+    buf += `:${returnType}`
+  }
+
+  buf += `{${code}}`
+
+  return buf
 }
 
 function transpileWithWrap (code: string): string {
