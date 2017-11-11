@@ -22,30 +22,30 @@
     "url": "https://github.com/ktsn/typed-vue-template.git"
   },
   "scripts": {
-    "prepublish": "npm run clean && npm run test && npm run build",
+    "prepublishOnly": "npm run clean && npm run test && npm run build",
     "clean": "rm -rf lib",
     "build": "tsc -p src",
     "dev": "npm run test:unit -- -w",
     "lint": "tslint \"src/**/*.ts\" && tslint \"test/**/*.ts\"",
     "test": "npm run lint && npm run test:unit",
-    "test:unit": "mocha --compilers ts:espower-typescript/guess test/**/*.ts"
+    "test:unit": "mocha --require espower-typescript/guess test/**/*.ts"
   },
   "devDependencies": {
-    "@types/mocha": "^2.2.39",
-    "@types/node": "^7.0.7",
+    "@types/mocha": "^2.2.44",
+    "@types/node": "^8.0.51",
     "@types/power-assert": "1.4.29",
-    "espower-typescript": "^8.0.0",
-    "glob": "^7.1.1",
-    "mocha": "^3.2.0",
-    "power-assert": "^1.4.2",
-    "tslint": "^4.4.2",
-    "tslint-config-ktsn": "^2.0.1",
-    "typescript": "^2.2.1",
-    "vue": "^2.2.2",
-    "vue-template-compiler": "^2.2.2"
+    "espower-typescript": "^8.1.2",
+    "glob": "^7.1.2",
+    "mocha": "^4.0.1",
+    "power-assert": "^1.4.4",
+    "tslint": "^5.8.0",
+    "tslint-config-ktsn": "^2.1.0",
+    "typescript": "^2.6.1",
+    "vue": "^2.5.3",
+    "vue-template-compiler": "^2.5.3"
   },
   "dependencies": {
-    "vue-template-es2015-compiler": "^1.5.1"
+    "vue-template-es2015-compiler": "^1.6.0"
   },
   "peerDependencies": {
     "typescript": "^2.0.0",
