@@ -34,6 +34,8 @@ declare module 'vue/types/vue' {
     // Allow reserved tag names
     _c: {
       (name: ReservedTag, data?: any, children?: any): any
+      // Temporary relax component helper type
+      (...args: any[]): any
     }
   }
 }
